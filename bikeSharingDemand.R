@@ -32,64 +32,80 @@ main <- function(weekend=FALSE)
 
   print(str(trainData))
   
-  #m5treeModel <- m5Tree(trainData[-1])
-  #regTree <- regTree(trainData[-1])
-  #linearModel <- linearModel(trainData[-1])
-  randomForestModel <- randomForestTree(trainData[-1])
+  m5treeModel <- m5Tree(trainData[-1])
+  print(m5treeModel)
+  regTree <- regTree(trainData[-1])
+  linearModel <- linearModel(trainData[-1])
+  #randomForestModel <- randomForestTree(trainData[1:4000, -1])
   #caretModel <- caret(trainData[-1])
   
-  #result_m5 <- predict(m5treeModel, trainData[-1])
-  #result_regTree <- predict(regTree, trainData[-1])
-  #result_linearModel <- predict(linearModel, trainData[-1])
-  result_randomForest <- predict(randomForestModel, trainData[-1])
+  result_m5 <- predict(m5treeModel, trainData[-1])
+  result_regTree <- predict(regTree, trainData[-1])
+  result_linearModel <- predict(linearModel, trainData[-1])
+  #result_randomForest <- predict(randomForestModel, trainData[-1])
   #result_caret <- predict(caretModel, trainData[-1])
   
   # values < 0 are not allowed
-  #result_m5 <- ifelse(result_m5 < 1, 1, result_m5)
-  #result_regTree <- ifelse(result_regTree < 1, 1, result_regTree)
-  #result_linearModel <- ifelse(result_linearModel < 1, 1, result_linearModel)
-  result_randomForest <- ifelse(result_randomForest < 1, 1, result_randomForest)
+  result_m5 <- ifelse(result_m5 < 1, 1, result_m5)
+  result_regTree <- ifelse(result_regTree < 1, 1, result_regTree)
+  result_linearModel <- ifelse(result_linearModel < 1, 1, result_linearModel)
+  #result_randomForest <- ifelse(result_randomForest < 1, 1, result_randomForest)
   #result_caret <- ifelse(result_caret < 1, 1, result_caret)
   
-  #print(paste0('m5tree correlation:              ', cor(result_m5, trainData$count)))
-  #print(paste0('regression tree correlation:     ', cor(result_regTree, trainData$count)))
-  #print(paste0('linearModel correlation:         ', cor(result_linearModel, trainData$count)))
-  print(paste0('randomForstModel correlation:    ', cor(result_randomForest, trainData$count)))
+  print(paste0('m5tree correlation:              ', cor(result_m5, trainData$count)))
+  print(paste0('regression tree correlation:     ', cor(result_regTree, trainData$count)))
+  print(paste0('linearModel correlation:         ', cor(result_linearModel, trainData$count)))
+  #print(paste0('randomForstModel correlation:    ', cor(result_randomForest, trainData$count)))
   #print(paste0('caret correlation:               ', cor(result_caret, trainData$count)))
   
-  #print(paste0('m5tree root mean squared error:           ', sqrt(mean((result_m5 - trainData$count)^2))))
-  #print(paste0('regression root mean squared error:       ', sqrt(mean((result_regTree - trainData$count)^2))))
-  #print(paste0('linearModel root mean squared error:      ', sqrt(mean((result_linearModel - trainData$count)^2))))
-  print(paste0('randomForstModel root mean squared error: ', sqrt(mean((result_randomForest - trainData$count)^2))))
+  print(paste0('m5tree root mean squared error:           ', sqrt(mean((result_m5 - trainData$count)^2))))
+  print(paste0('regression root mean squared error:       ', sqrt(mean((result_regTree - trainData$count)^2))))
+  print(paste0('linearModel root mean squared error:      ', sqrt(mean((result_linearModel - trainData$count)^2))))
+  #print(paste0('randomForstModel root mean squared error: ', sqrt(mean((result_randomForest - trainData$count)^2))))
   #print(paste0('caret randomForstModel root mean squared error: ', sqrt(mean((result_caret - trainData$count)^2))))
   
-  #print(summary(trainData$count))
-  #print(summary(result_randomForest))
-  #print(summary(result_m5))
+  require(Metrics)
+  print(paste0('m5tree rmsle:                    ', rmsle(result_m5, trainData$count)))
+  print(paste0('regression rmsle:                ', rmsle(result_regTree, trainData$count)))
+  print(paste0('linearModel rmsle:               ', rmsle(result_linearModel, trainData$count)))
+  #print(paste0('randomForstModel rmsle:          ', rmsle(result_randomForest, trainData$count)))
+  #print(paste0('caret:            ', rmsle(result_m5, trainData$count)))
   
-  #print(summary(caretModel))
-  print(summary(trainData$count))
-  print(summary(result_randomForest))
-
+  trainData <- cbind(trainData, result_m5)
+  trainData$diff <- trainData$result_m5 - trainData$count
+  trainData
 }
 
 addDateVariables <- function(data)
 {
   date <- strptime(data$datetime, format="%Y-%m-%d %H:%M:%S")
   
-  data$hour <- factor(format.POSIXlt(date, "%H"))
+  data$hour <- as.numeric(format.POSIXlt(date, "%H"))
   data$month <- factor(format.POSIXlt(date, "%m"))
   data$weekday <- factor(format.POSIXlt(date, "%u"))
+  
+  data$hourtype <- ifelse(data$hour <= 5, "nacht", NA)
+  data$hourtype <- ifelse(data$workingday==0 & data$hour > 5, "vrijedag_overdag", data$hourtype)
+  
+  data$hourtype <- ifelse(data$workingday==1 & data$hour==6, "werkdag_vroeg", data$hourtype)
+  data$hourtype <- ifelse(data$workingday==1 & data$hour==8, "werkdag_ochtendspits", data$hourtype)
+  data$hourtype <- ifelse(data$workingday==1 & (data$hour==17 | data$hour==18), "werkdag_middagspits", data$hourtype)
+  data$hourtype <- ifelse(data$workingday==1 & (data$hour==7 | data$hour==9), "werkdag_rondochtendspits", data$hourtype)
+  data$hourtype <- ifelse(data$workingday==1 & (data$hour==16 | data$hour==19), "werkdag_rondavondspits", data$hourtype)
+  data$hourtype <- ifelse(data$workingday==1 & data$hour>=10 & data$hour<=16, "werkdag_middag", data$hourtype)
+  data$hourtype <- ifelse(data$workingday==1 & (data$hour==20 | data$hour==21), "werkdag_vooravond", data$hourtype)
+  data$hourtype <- ifelse(data$workingday==1 & data$hour>=22, "werkdag_avond", data$hourtype)
+
+  data$hourtype <- factor(data$hourtype)
+  data$hourtype <- NULL
+  #data$hour <- NULL
     
   # season will be derived from month
-  data$season <- NULL
+  #data$season <- NULL
   #data$holiday <- NULL
   
-  data$avondspitslekkerweertje <- ifelse(data$holiday=="0" & data$workingday==1 & (data$hour=="18" | data$hour=="17") & 
-                                           data$atemp > 24, 1, 0)
-  
   # workingday be derived from day
-  data$workingday <- NULL
+  #data$workingday <- NULL
 
   data
 }
@@ -97,8 +113,8 @@ addDateVariables <- function(data)
 randomForestTree <- function(trainData)
 {
   require(randomForest)
-  trainedModel <- randomForest(count ~ . , trainData, mtry=16, importance=T)
-  print(trainedModel)
+  trainedModel <- randomForest(count ~ . , trainData, mtry=8)
+  #print(summary(trainedModel))
   trainedModel
 }
 
@@ -117,7 +133,8 @@ m5Tree <- function(trainData)
 {
   require(RWeka)
   trainedModel <- M5P(count ~ . , trainData)
-  print(trainedModel)
+  
+  #print(summary(trainedModel))
   trainedModel
 }
 
@@ -125,7 +142,7 @@ regTree <- function(trainData)
 {
   require(rpart)
   trainedModel <- rpart(count ~ . , trainData)
-  print(trainedModel)
+  #print(summary(trainedModel))
   #require(rpart.plot)
   #rpart.plot(trainedModel, digits = 5)
   
@@ -135,23 +152,9 @@ regTree <- function(trainData)
 linearModel <- function(trainData)
 {
   trainedModel <- lm(count ~ . , trainData)
-  print(trainedModel)
+  #print(summary(trainedModel))
   trainedModel
 }
-
-
-writeResult <- function(resultData, testLocation, targetLocation='/home/wijnand/R_workspace_bikedemand/resources/result.csv')
-{
-  data <- read.csv(testLocation)
-  datetime <- data$datetime
-  
-  result <- NULL
-  result$datetime <- datetime
-  result$count <- resultData
-  
-  write.csv(result, targetLocation, quote=F, row.names=F)
-}
-
 
 loadData <- function(location='/home/wijnand/R_workspace_bikedemand/resources/train.csv')
 {
@@ -167,7 +170,6 @@ loadData <- function(location='/home/wijnand/R_workspace_bikedemand/resources/tr
   
   # temp & atemp have a .98 correlation so are basically the same
   data$temp <- NULL
-  
-  
+    
   data
 }
