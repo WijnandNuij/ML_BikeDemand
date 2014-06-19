@@ -25,13 +25,13 @@ runTestSet <- function(targetLocation='/home/wijnand/R_workspace_bikedemand/reso
   write.csv(result, targetLocation, quote=F, row.names=F)
 }
 
-main <- function(percentageTrain=0.9)
+main <- function(percentageTrain=0.7)
 {
   completeSet <- loadData()
   completeSet <- addDateVariables(completeSet)
   
   # order randomly
-  set.seed(12345)
+  set.seed(159)
   completeSet <- completeSet[order(runif(nrow(completeSet))),]
   
   # row number of x% of the data for training set
@@ -45,8 +45,23 @@ main <- function(percentageTrain=0.9)
   result_lm <- predictWithModel(linearModel(trainingSet[-1]), testSet, "linearModel")
   result_reg <- predictWithModel(regTree(trainingSet[-1]), testSet, "regTree")
   #result_rf <- predictWithModel(randomForestTree(trainingSet[-1]), testSet, "randomForestTree")
+  #result_gbm <- predictWithGbm(trainingSet[-1], testSet, "gbm")
+  #result_caretM5 <- predictWithModel(caretM5(trainingSet[-1]), testSet, "caretm5")
   
   result_m5
+}
+
+predictWithGbm <- function(trainData, testData, name)
+{
+  require(gbm)
+  trainedModel <- gbm(count ~ ., trainData, distribution = "poisson", n.trees = 150, shrinkage=0.01, interaction.depth = 3)
+  result <- predict.gbm(trainedModel, testData)
+  
+  print(paste0(name, ' correlation: ', round(cor(result, testData$count), digits=3)))
+  
+  require(Metrics)
+  print(paste0(name, ' rmsle: ', round(rmsle(result, testData$count), digits=3)))
+  result
 }
 
 predictWithModel <- function(genericModel, testData, name)
@@ -85,7 +100,7 @@ addDateVariables <- function(data)
   data$hourtype <- ifelse(data$workingday==1 & data$hour>=22, "werkdag_avond", data$hourtype)
 
   data$hourtype <- factor(data$hourtype)
-  data$hourtype <- NULL
+  #data$hourtype <- NULL
   data$hour <- factor(data$hour)
     
   # season will be derived from month
@@ -111,18 +126,28 @@ caret <- function(trainData)
   require(caret)
   ctrl <- trainControl(method = "repeatedcv", number = 3, repeats = 3)
   grid_rf <- expand.grid(.mtry = c(4, 8, 16))
-  set.seed(300)
+  set.seed(301)
   m_rf <- train(count ~ ., data = trainData, method = "rf", metric = "RMSE", trControl = ctrl, tuneGrid = grid_rf)
   #print(m_rf)
   m_rf
 }
 
+caretM5 <- function(trainData)
+{
+  require(caret)
+  fitControl <- trainControl(method = "cv", number = 2, repeats = 2)
+  #model <- train(count ~ ., data = trainData, method = "M5", metric = "RMSE", trControl=fitControl)
+  model <- train(count ~ ., data = trainData,method = "gbm",trControl = fitControl,verbose = F)
+  print(model)
+  model
+}
+
 m5Tree <- function(trainData)
 {
   require(RWeka)
-  trainedModel <- M5P(count ~ . , trainData)
+  trainedModel <- M5P(count ~ . , trainData, control = Weka_control(M=1))
   
-  #print(summary(trainedModel))
+  write_to_dot(trainedModel, con=file("/home/wijnand/test.dot", "w"))
   trainedModel
 }
 
@@ -159,6 +184,7 @@ loadData <- function(location='/home/wijnand/R_workspace_bikedemand/resources/tr
   
   # temp & atemp have a .98 correlation so are basically the same
   #data$temp <- NULL
-    
+  #data$atemp <- NULL
+  
   data
 }
